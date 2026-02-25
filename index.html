@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NYP Dashboard — NewYork-Presbyterian Performance Overview</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0a0f;--card:#12121a;--card-border:#1e1e2e;--accent:#4a9eff;--accent2:#7c5cfc;--accent3:#00c9a7;--text:#e4e4e7;--text-muted:#71717a;--text-dim:#52525b;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444}
@@ -118,6 +120,24 @@ a{color:var(--accent);text-decoration:none}
 .donut-legend{display:flex;flex-direction:column;gap:0.4rem}
 .legend-item{display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;color:var(--text-muted)}
 .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Map */
+#campus-map{background:#0d1117}
+.leaflet-popup-content-wrapper{background:var(--card);color:var(--text);border:1px solid var(--card-border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.leaflet-popup-tip{background:var(--card)}
+.leaflet-popup-content{margin:12px 16px;font-family:inherit}
+.leaflet-popup-content .popup-name{font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:4px}
+.leaflet-popup-content .popup-type{font-size:0.75rem;color:var(--text-muted);margin-bottom:8px}
+.leaflet-popup-content .popup-stat{display:flex;justify-content:space-between;padding:3px 0;font-size:0.8rem}
+.leaflet-popup-content .popup-stat .label{color:var(--text-muted)}
+.leaflet-popup-content .popup-stat .val{font-weight:600}
+.campus-marker{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 2px 12px rgba(74,158,255,0.5);font-size:14px;font-weight:700;color:#000;transition:transform 0.2s}
+.campus-marker:hover{transform:scale(1.2)}
+.campus-marker.academic{background:var(--accent2);box-shadow:0 2px 12px rgba(124,92,252,0.5)}
+.campus-marker.behavioral{background:var(--accent3);box-shadow:0 2px 12px rgba(0,201,167,0.5)}
+.leaflet-control-zoom a{background:var(--card)!important;color:var(--text)!important;border-color:var(--card-border)!important}
+.leaflet-control-attribution{background:rgba(10,10,15,0.8)!important;color:var(--text-dim)!important;font-size:0.6rem!important}
+.leaflet-control-attribution a{color:var(--text-muted)!important}
 </style>
 </head>
 <body>
@@ -222,6 +242,26 @@ a{color:var(--accent);text-decoration:none}
         <div class="beds">164</div>
         <div class="type">Community Hospital</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Interactive Campus Map -->
+  <div class="card" style="grid-column:1/-1">
+    <div class="card-header">
+      <span class="card-title">Campus Locations — NYC Metro Area</span>
+      <span class="card-icon">🗺️</span>
+    </div>
+    <div id="campus-map" style="height:450px;border-radius:8px;overflow:hidden;border:1px solid var(--card-border)"></div>
+    <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;justify-content:center">
+      <span class="tag highlight" style="cursor:pointer" onclick="mapFlyTo(40.7648,-73.9538,14)">Weill Cornell</span>
+      <span class="tag highlight" style="cursor:pointer" onclick="mapFlyTo(40.8405,-73.9422,14)">Columbia</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.8782,-73.9265,14)">Allen</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.7107,-74.0026,14)">Lower Manhattan</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.7470,-73.8833,14)">Queens</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.6710,-73.9786,14)">Brooklyn Methodist</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(41.0526,-73.7584,14)">Westchester</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(41.2905,-73.8933,14)">Hudson Valley</span>
+      <span class="tag" style="cursor:pointer;background:var(--accent);color:#000;border-color:var(--accent)" onclick="mapFitAll()">View All</span>
     </div>
   </div>
 
@@ -461,6 +501,39 @@ a{color:var(--accent);text-decoration:none}
   NYP Dashboard · Data sourced from public filings, CMS Hospital Compare, US News & World Report, NIH Reporter · Built for Project PS<br>
   <span id="cms-status">Connecting to CMS Hospital Compare API…</span>
 </div>
+
+<script>
+// Campus Map
+var campusMap, campusMarkers=[];
+(function initMap(){
+  var campuses=[
+    {name:'Weill Cornell Medical Center',type:'Academic Medical Center',cls:'academic',lat:40.7648,lng:-73.9538,beds:862,specialties:'Cardiology, Oncology, Neurology',cms:'330101',icon:'🏛️'},
+    {name:'Columbia University Irving Medical Center',type:'Academic Medical Center',cls:'academic',lat:40.8405,lng:-73.9422,beds:745,specialties:'Neurosurgery, Psychiatry, Transplant',cms:'330024',icon:'🏛️'},
+    {name:'Allen Hospital',type:'Community Hospital',cls:'',lat:40.8782,lng:-73.9265,beds:196,specialties:'Emergency, General Surgery',cms:'330193',icon:'🏥'},
+    {name:'Lower Manhattan Hospital',type:'Community Hospital',cls:'',lat:40.7107,lng:-74.0026,beds:180,specialties:'Emergency, Orthopedics',cms:'330214',icon:'🏥'},
+    {name:'Queens',type:'Community Hospital',cls:'',lat:40.7470,lng:-73.8833,beds:535,specialties:'Cardiac, Stroke, Maternity',cms:'330055',icon:'🏥'},
+    {name:'Brooklyn Methodist Hospital',type:'Community Hospital',cls:'',lat:40.6710,lng:-73.9786,beds:591,specialties:'Robotic Surgery, Cancer',cms:'330005',icon:'🏥'},
+    {name:'Westchester Behavioral Health',type:'Behavioral Health Center',cls:'behavioral',lat:41.0526,lng:-73.7584,beds:288,specialties:'Psychiatry, Addiction, Pediatric MH',cms:'332059',icon:'🧠'},
+    {name:'Hudson Valley Hospital',type:'Community Hospital',cls:'',lat:41.2905,lng:-73.8933,beds:164,specialties:'Emergency, Maternity, Oncology',cms:'330084',icon:'🏥'}
+  ];
+  campusMap=L.map('campus-map',{zoomControl:true,attributionControl:true,scrollWheelZoom:true}).setView([40.82,-73.92],10);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd',maxZoom:19
+  }).addTo(campusMap);
+  campuses.forEach(function(c){
+    var icon=L.divIcon({className:'',html:'<div class="campus-marker '+c.cls+'">'+c.icon+'</div>',iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});
+    var popup='<div class="popup-name">'+c.name+'</div><div class="popup-type">'+c.type+'</div>'
+      +'<div class="popup-stat"><span class="label">Licensed Beds</span><span class="val">'+c.beds+'</span></div>'
+      +'<div class="popup-stat"><span class="label">Key Specialties</span><span class="val" style="text-align:right;max-width:150px">'+c.specialties+'</span></div>'
+      +'<div class="popup-stat"><span class="label">CMS ID</span><span class="val" style="color:var(--text-dim)">'+c.cms+'</span></div>';
+    var m=L.marker([c.lat,c.lng],{icon:icon}).addTo(campusMap).bindPopup(popup,{maxWidth:280});
+    campusMarkers.push(m);
+  });
+})();
+function mapFlyTo(lat,lng,z){campusMap.flyTo([lat,lng],z,{duration:1})}
+function mapFitAll(){var g=L.featureGroup(campusMarkers);campusMap.flyToBounds(g.getBounds().pad(0.1),{duration:1})}
+</script>
 
 <script>
 (function(){

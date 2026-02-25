@@ -1,0 +1,19 @@
+  <!-- Interactive Campus Map -->
+  <div class="card" style="grid-column:1/-1">
+    <div class="card-header">
+      <span class="card-title">Campus Locations — NYC Metro Area</span>
+      <span class="card-icon">🗺️</span>
+    </div>
+    <div id="campus-map" style="height:450px;border-radius:8px;overflow:hidden;border:1px solid var(--card-border)"></div>
+    <div style="display:flex;gap:1rem;margin-top:0.75rem;flex-wrap:wrap;justify-content:center">
+      <span class="tag highlight" style="cursor:pointer" onclick="mapFlyTo(40.7648,-73.9538,14)">Weill Cornell</span>
+      <span class="tag highlight" style="cursor:pointer" onclick="mapFlyTo(40.8405,-73.9422,14)">Columbia</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.8782,-73.9265,14)">Allen</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.7107,-74.0026,14)">Lower Manhattan</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.7470,-73.8833,14)">Queens</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(40.6710,-73.9786,14)">Brooklyn Methodist</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(41.0526,-73.7584,14)">Westchester</span>
+      <span class="tag" style="cursor:pointer" onclick="mapFlyTo(41.2905,-73.8933,14)">Hudson Valley</span>
+      <span class="tag" style="cursor:pointer;background:var(--accent);color:#000;border-color:var(--accent)" onclick="mapFitAll()">View All</span>
+    </div>
+  </div>
