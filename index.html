@@ -93,6 +93,16 @@ a{color:var(--accent);text-decoration:none}
   .campus-grid{grid-template-columns:1fr}
 }
 
+/* Trend Charts */
+.trend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:0.75rem}
+.trend-chart-wrap{background:#1a1a2e;border-radius:10px;padding:1rem 1rem 0.75rem;position:relative}
+.trend-chart-wrap .trend-title{font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.15rem}
+.trend-chart-wrap .trend-current{font-size:1.4rem;font-weight:700;letter-spacing:-0.02em}
+.trend-chart-wrap .trend-delta{font-size:0.7rem;font-weight:600;margin-left:0.4rem}
+.trend-chart-wrap .trend-delta.up{color:var(--success)}
+.trend-chart-wrap .trend-delta.down{color:var(--danger)}
+.trend-chart-wrap canvas{margin-top:0.5rem}
+
 /* Animations */
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .card{animation:fadeIn 0.5s ease both}
@@ -479,6 +489,36 @@ a{color:var(--accent);text-decoration:none}
     </div>
   </div>
 
+  <!-- 5-Year Trend Charts -->
+  <div class="card" style="grid-column:1/-1">
+    <div class="card-header">
+      <span class="card-title">5-Year Trends (FY 2021–2025)</span>
+      <span class="card-icon">📈</span>
+    </div>
+    <div class="trend-grid">
+      <div class="trend-chart-wrap">
+        <div class="trend-title">Annual Revenue</div>
+        <div><span class="trend-current" style="color:var(--accent3)">$12.8B</span><span class="trend-delta up">▲ 34% over 5yr</span></div>
+        <canvas id="chart-revenue" height="120"></canvas>
+      </div>
+      <div class="trend-chart-wrap">
+        <div class="trend-title">Patient Visits</div>
+        <div><span class="trend-current" style="color:var(--accent)">2.1M</span><span class="trend-delta up">▲ 17% over 5yr</span></div>
+        <canvas id="chart-patients" height="120"></canvas>
+      </div>
+      <div class="trend-chart-wrap">
+        <div class="trend-title">US News National Rank</div>
+        <div><span class="trend-current" style="color:#fbbf24">#4</span><span class="trend-delta up">▲ improved from #7</span></div>
+        <canvas id="chart-ranking" height="120"></canvas>
+      </div>
+      <div class="trend-chart-wrap">
+        <div class="trend-title">Quality Score (CMS Stars)</div>
+        <div><span class="trend-current" style="color:var(--accent2)">4.0★</span><span class="trend-delta up">▲ from 3★</span></div>
+        <canvas id="chart-quality" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- Peer Comparison -->
   <div class="card" style="grid-column:1/-1">
     <div class="card-header">
@@ -711,6 +751,32 @@ function mapFitAll(){var g=L.featureGroup(campusMarkers);campusMap.flyToBounds(g
     }
   }).catch(function(){});
 
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  var labels=['FY 2021','FY 2022','FY 2023','FY 2024','FY 2025'];
+  var shared={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#12121a',borderColor:'#1e1e2e',borderWidth:1,titleColor:'#e4e4e7',bodyColor:'#e4e4e7',padding:10,cornerRadius:8,displayColors:false}},scales:{x:{grid:{display:false},ticks:{color:'#71717a',font:{size:10}}},y:{grid:{color:'#1e1e2e'},ticks:{color:'#71717a',font:{size:10}},beginAtZero:false}},elements:{point:{radius:4,hoverRadius:6,borderWidth:2,backgroundColor:'#0a0a0f'},line:{tension:0.35,borderWidth:2.5}},interaction:{intersect:false,mode:'index'}};
+
+  function makeGrad(ctx,c1,c2){var g=ctx.createLinearGradient(0,0,0,120);g.addColorStop(0,c1);g.addColorStop(1,c2);return g;}
+
+  // Revenue
+  var rc=document.getElementById('chart-revenue').getContext('2d');
+  new Chart(rc,{type:'line',data:{labels:labels,datasets:[{data:[9.5,10.2,11.1,12.0,12.8],borderColor:'#00c9a7',backgroundColor:makeGrad(rc,'rgba(0,201,167,0.25)','rgba(0,201,167,0)'),fill:true,pointBorderColor:'#00c9a7'}]},options:{...shared,scales:{...shared.scales,y:{...shared.scales.y,ticks:{...shared.scales.y.ticks,callback:function(v){return '$'+v+'B'}}}}}});
+
+  // Patient Visits
+  var pc=document.getElementById('chart-patients').getContext('2d');
+  new Chart(pc,{type:'line',data:{labels:labels,datasets:[{data:[1.8,1.7,1.85,2.0,2.1],borderColor:'#4a9eff',backgroundColor:makeGrad(pc,'rgba(74,158,255,0.25)','rgba(74,158,255,0)'),fill:true,pointBorderColor:'#4a9eff'}]},options:{...shared,scales:{...shared.scales,y:{...shared.scales.y,ticks:{...shared.scales.y.ticks,callback:function(v){return v+'M'}}}}}});
+
+  // US News Ranking (lower=better, invert axis)
+  var rk=document.getElementById('chart-ranking').getContext('2d');
+  new Chart(rk,{type:'line',data:{labels:labels,datasets:[{data:[7,6,6,6,4],borderColor:'#fbbf24',backgroundColor:makeGrad(rk,'rgba(251,191,36,0.25)','rgba(251,191,36,0)'),fill:true,pointBorderColor:'#fbbf24'}]},options:{...shared,scales:{...shared.scales,y:{...shared.scales.y,reverse:true,min:1,max:10,ticks:{...shared.scales.y.ticks,callback:function(v){return '#'+v},stepSize:1}}}}});
+
+  // Quality Score (CMS Stars)
+  var qc=document.getElementById('chart-quality').getContext('2d');
+  new Chart(qc,{type:'line',data:{labels:labels,datasets:[{data:[3,3,3,4,4],borderColor:'#7c5cfc',backgroundColor:makeGrad(qc,'rgba(124,92,252,0.25)','rgba(124,92,252,0)'),fill:true,pointBorderColor:'#7c5cfc'}]},options:{...shared,scales:{...shared.scales,y:{...shared.scales.y,min:1,max:5,ticks:{...shared.scales.y.ticks,callback:function(v){return v+'★'},stepSize:1}}}}});
 })();
 </script>
 
