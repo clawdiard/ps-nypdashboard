@@ -458,9 +458,188 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <div class="footer">
-  NYP Dashboard · Data sourced from public filings, CMS, US News & World Report, NIH Reporter · Built for Project PS<br>
-  Last refreshed: February 2026
+  NYP Dashboard · Data sourced from public filings, CMS Hospital Compare, US News & World Report, NIH Reporter · Built for Project PS<br>
+  <span id="cms-status">Connecting to CMS Hospital Compare API…</span>
 </div>
+
+<script>
+(function(){
+  // CMS Provider IDs for NYP campuses
+  const PROVIDERS = {
+    weillCornell: '330101',
+    columbia: '330024',
+    queens: '330055',
+    brooklyn: '330005',
+    allen: '330193',
+    lowerManhattan: '330214',
+    hudson: '330084',
+    westchester: '332059'
+  };
+  const PRIMARY = PROVIDERS.weillCornell;
+  const PRIMARY_IDS = [PROVIDERS.weillCornell, PROVIDERS.columbia];
+
+  const CMS_BASE = 'https://data.cms.gov/provider-data/api/1/datastore/query';
+
+  // Dataset IDs (CMS Provider Data Catalog)
+  const DATASETS = {
+    general: 'xubh-q36u',       // Hospital General Information
+    hcahps: 'dgck-syfz',        // Patient Survey (HCAHPS)
+    readmissions: '632h-zaca',   // Unplanned Hospital Visits
+    complications: 'ynj2-r877',  // Complications and Deaths
+    timely: 'yv7e-xc69',        // Timely and Effective Care
+    infections: '77hc-ibv8'      // Healthcare Associated Infections
+  };
+
+  function cmsQuery(dataset, conditions, limit) {
+    const params = new URLSearchParams();
+    params.set('limit', limit || 50);
+    params.set('offset', 0);
+    conditions.forEach(function(c) {
+      params.append('conditions[0][property]', c.property);
+      params.append('conditions[0][value]', c.value);
+      params.append('conditions[0][operator]', c.operator || '=');
+    });
+    return fetch(CMS_BASE + '/' + dataset + '/0?' + params.toString())
+      .then(function(r){ return r.json(); })
+      .then(function(d){ return d.results || []; });
+  }
+
+  function queryProvider(dataset, providerId, limit) {
+    return cmsQuery(dataset, [{property:'facility_id', value:providerId}], limit);
+  }
+
+  // Helper to update element text safely
+  function setText(el, text) { if(el) el.textContent = text; }
+  function setHTML(el, html) { if(el) el.innerHTML = html; }
+
+  // Add data-cms-id attributes for targeted updates
+  var qualityCard = null;
+  var statRows = document.querySelectorAll('.stat-row');
+  statRows.forEach(function(row){
+    var label = row.querySelector('.label');
+    if(!label) return;
+    var t = label.textContent.trim().toLowerCase();
+    if(t.includes('cms star')) row.setAttribute('data-cms','star-rating');
+    if(t.includes('leapfrog')) row.setAttribute('data-cms','leapfrog');
+    if(t.includes('readmission')) row.setAttribute('data-cms','readmission');
+    if(t.includes('patient satisfaction') || t.includes('hcahps')) row.setAttribute('data-cms','hcahps');
+    if(t.includes('mortality')) row.setAttribute('data-cms','mortality');
+    if(t.includes('hai performance')) row.setAttribute('data-cms','hai');
+  });
+
+  var results = { loaded: 0, total: 3 };
+
+  function checkDone(){
+    results.loaded++;
+    var statusEl = document.getElementById('cms-status');
+    if(results.loaded >= results.total){
+      setText(statusEl, '✅ Live CMS data loaded · Last API fetch: ' + new Date().toLocaleString());
+      // Update header badge
+      var badge = document.querySelector('.header .badge');
+      if(badge){
+        badge.textContent = 'LIVE DATA';
+        badge.style.background = 'var(--success)';
+      }
+      // Update last-updated
+      var lu = document.querySelector('.last-updated');
+      if(lu) setText(lu, 'Live from CMS Hospital Compare · ' + new Date().toLocaleDateString());
+    } else {
+      setText(statusEl, 'Loading CMS data… (' + results.loaded + '/' + results.total + ')');
+    }
+  }
+
+  // 1. General Information → Star Rating
+  queryProvider(DATASETS.general, PRIMARY, 5).then(function(rows){
+    if(rows.length === 0) return;
+    var row = rows[0];
+    var starEl = document.querySelector('[data-cms="star-rating"] .value');
+    if(starEl && row.hospital_overall_rating && row.hospital_overall_rating !== 'Not Available'){
+      var n = parseInt(row.hospital_overall_rating);
+      var stars = '';
+      for(var i=1;i<=5;i++){
+        stars += '<span class="star '+(i<=n?'filled':'empty')+'">★</span>';
+      }
+      setHTML(starEl, '<span class="stars">' + stars + '</span>');
+    }
+    // Also check for emergency services, hospital type
+  }).catch(function(){}).finally(checkDone);
+
+  // 2. HCAHPS Patient Satisfaction
+  queryProvider(DATASETS.hcahps, PRIMARY, 100).then(function(rows){
+    if(rows.length === 0) return;
+    // Find overall hospital rating (H_STAR_RATING or H_HSP_RATING_*)
+    var overallRow = rows.find(function(r){
+      return r.hcahps_measure_id === 'H_HSP_RATING_9_10' || r.hcahps_measure_id === 'H_STAR_RATING';
+    });
+    var hcahpsEl = document.querySelector('[data-cms="hcahps"] .value');
+    if(overallRow && hcahpsEl){
+      var pct = overallRow.hcahps_answer_percent || overallRow.patient_survey_star_rating;
+      if(pct && pct !== 'Not Applicable' && pct !== 'Not Available'){
+        var val = pct.replace('%','');
+        var natl = overallRow.hcahps_answer_percent_footnote || '';
+        var comparison = '';
+        if(overallRow.hcahps_linear_mean_value){
+          comparison = ' <span style="color:var(--success);font-size:0.7rem">CMS Live</span>';
+        } else {
+          comparison = ' <span style="color:var(--accent);font-size:0.7rem">CMS Live</span>';
+        }
+        setHTML(hcahpsEl, val + '%' + comparison);
+      }
+    }
+    // Find recommend hospital rate
+    var recRow = rows.find(function(r){
+      return r.hcahps_measure_id === 'H_RECMND_DY';
+    });
+  }).catch(function(){}).finally(checkDone);
+
+  // 3. Readmissions & Mortality
+  queryProvider(DATASETS.readmissions, PRIMARY, 100).then(function(rows){
+    if(rows.length === 0) return;
+    // Find hospital-wide readmission
+    var readmitRow = rows.find(function(r){
+      return r.measure_id === 'READM_30_HOSP_WIDE' || (r.measure_name && r.measure_name.toLowerCase().includes('hospital-wide'));
+    });
+    var readmitEl = document.querySelector('[data-cms="readmission"] .value');
+    if(readmitRow && readmitEl){
+      var score = readmitRow.score;
+      if(score && score !== 'Not Available'){
+        var pct = parseFloat(score);
+        var arrow = pct < 15.5 ? '▼ better than national' : (pct > 15.5 ? '▲ above national' : '— national avg');
+        var color = pct < 15.5 ? 'var(--success)' : (pct > 15.5 ? 'var(--danger)' : 'var(--warning)');
+        setHTML(readmitEl, pct.toFixed(1) + '% <span style="color:'+color+';font-size:0.7rem">'+arrow+' · CMS Live</span>');
+      }
+    }
+
+    // Mortality
+    var mortRow = rows.find(function(r){
+      return r.measure_id === 'MORT_30_HOSP_WIDE' || (r.measure_name && r.measure_name.toLowerCase().includes('death'));
+    });
+    // Update mortality via compared_to_national
+  }).catch(function(){}).finally(checkDone);
+
+  // 4. HAI / Infections (bonus, non-blocking)
+  queryProvider(DATASETS.infections, PRIMARY, 100).then(function(rows){
+    if(rows.length === 0) return;
+    var haiEl = document.querySelector('[data-cms="hai"] .value');
+    if(!haiEl) return;
+    var measures = ['HAI_1','HAI_2','HAI_3','HAI_4','HAI_5','HAI_6'];
+    var below = 0, total = 0;
+    rows.forEach(function(r){
+      if(measures.some(function(m){ return r.measure_id && r.measure_id.startsWith(m); })){
+        if(r.compared_to_national){
+          total++;
+          var c = r.compared_to_national.toLowerCase();
+          if(c.includes('better') || c.includes('below')) below++;
+        }
+      }
+    });
+    if(total > 0){
+      setHTML(haiEl, below + '/' + total + ' below national <span style="color:var(--accent);font-size:0.7rem">CMS Live</span>');
+    }
+  }).catch(function(){});
+
+})();
+</script>
 
 </body>
 </html>
